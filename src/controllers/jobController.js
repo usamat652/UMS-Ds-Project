@@ -1,21 +1,26 @@
-import { Job } from '../models/job.js';
+import cron from 'node-cron';
+import { Job, JobValidationSchema } from '../models/job.js';
 import { rejectionEmailQueue } from '../services/emailService.js';
 import path from 'path';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs';
+import fs from 'fs/promises';
+import fs2 from 'fs';
 import { Op } from 'sequelize';
 import { FailedApi, SuccessApi } from '../config/apiResponse.js';
+import os from 'os';
 
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+  destination: function (req, file, cb) {
+    // Specify the destination folder where the uploaded files will be stored
+    cb(null, "uploads/");
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+  filename: function (req, file, cb) {
+    // Customize the filename to include the email address with PDF extension
+    const email = req.body.email || "default";
+    const fileName = `${email}.pdf`;
+    cb(null, fileName);
   },
 });
 
@@ -30,28 +35,21 @@ const handleFileUpload = (req, res, next) => {
     next();
   });
 };
-// const storage = multer.diskStorage({
-//   destination: function (req, file, cb) {
-//     cb(null, 'uploads/');
-//   },
-//   filename: function (req, file, cb) {
-//     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-//     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-//   },
-// });
-// const upload = multer({ storage: storage }).single('cv');
-// const handleFileUpload = (req, res, next) => {
-//   upload(req, res, function (err) {
-//   if (err instanceof multer.MulterError) {
-//     return res.status(400).json({ error: 'File upload error' });
-//   } else if (err) {
-//     return res.status(500).json({ error: 'Internal server error' });
+
+
+// for (const job of rejectedJobs) {
+//   const pdfPath = `C:\\Users\\usama\\Desktop\\DS-Final-Project\\uploads\\${job.email}.pdf`;
+//   // Check if the CV file exists before attempting to delete
+//   if (fs.existsSync(pdfPath)) {
+//     fs.unlinkSync(pdfPath);
 //   }
-//   next();
-// });
-// };
+// }
 const submitForm = async (req, res) => {
   try {
+    // const { error } = JobValidationSchema(req.body);
+    //     if (error) {
+    //         return FailedApi(res, 400, { message: "Validation error", error: error.details[0].message });
+    //     }
     const {
       userName,
       email,
@@ -63,8 +61,11 @@ const submitForm = async (req, res) => {
       age,
       isDelete = false,
     } = req.body;
-
-    const cvPath = req.file ? req.file.path : ''; // Check if the file was uploaded
+    let cvPath = '';
+    if (req.file ) {
+      cvPath = req.file.path;
+    }
+    // const cvPath = req.file ? req.file.path : ''; // Check if the file was uploaded
 
     // Create a new job applicant
     const newApplicant = await Job.create({
@@ -80,12 +81,15 @@ const submitForm = async (req, res) => {
       age,
       isDelete,
     });
-
+    console.log(cvPath);
     return SuccessApi(res, 200, {
       message: 'Job applicant created successfully',
       data: newApplicant,
     });
   } catch (error) {
+    if (req.file.path) {
+      fs2.unlinkSync(req.file.path);
+    }
     console.error('Error creating job applicant:', error);
     return FailedApi(res, 400, { error: 'Error creating job applicant' });
   }
@@ -95,7 +99,7 @@ const getAllapplicants = async (req, res) => {
   try {
     // Pagination parameters
     const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 5;
+    const limit = parseInt(req.query.limit, 10) || 100;
     const search = req.query.search || '';
     const status = req.query.status || '';
     const offset = (page - 1) * limit;
@@ -144,6 +148,7 @@ const getAllapplicants = async (req, res) => {
       },
       data: applicants.rows,
     });
+    console.log("Get All Applicants Api Hit")
   } catch (error) {
     // Handle any errors that occur during the process
     FailedApi(res, 500, {
@@ -169,19 +174,22 @@ const updateApplicantStatus = async (req, res) => {
     applicant.status = status;
     await applicant.save();
 
-    if (status === 'rejected'|| 'Rejected') {
+    if (status === 'rejected' || 'Rejected') {
       // Add the task to the Bull rejectionEmailQueue
-      
+
       // Update applicant status and send response
       applicant.status = status;
       await applicant.save();
       await rejectionEmailQueue.add('rejectionEmailQueue', { user: applicant });
-      
+    } else if(status === 'accepted'){
+        applicant.status = status;
+        await applicant.save();
+        res.status(200).json({ message: 'Applicant has been accepted.' });
+      }
       return SuccessApi(res, 200, {
         status: 'Application Rejected',
         data: applicant,
       });
-    }
 
     // If status is not 'rejected', send 'Application Accepted' response
     return SuccessApi(res, 200, {
@@ -194,35 +202,95 @@ const updateApplicantStatus = async (req, res) => {
   }
 };
 
-
-const downloadCv = async (req, res) => {
-  const { id } = req.params;
+const softDeleteRejectedJobs = async () => {
   try {
-    const applicant = await Job.findOne({
+    const result = await Job.destroy({
       where: {
-        jobId: id,
-      },
+        status: 'rejected'
+      }
     });
-
-    if (!applicant) {
-      return FailedApi(res, 404, { message: 'Applicant not found' });
-    }
-    const cvFilePath = applicant.cv
-    console.log('CV File Path:', cvFilePath);
-    if (fs.existsSync(cvFilePath)) {
-      const fileExtension = path.extname(applicant.cv);
-      res.setHeader('Content-Disposition', `attachment; filename="${applicant.userName}_CV${fileExtension}"`);
-      res.setHeader('Content-Type', 'application/pdf');
-      const fileStream = fs.createReadStream(cvFilePath);
-      fileStream.pipe(res);
-    } else {
-      FailedApi(res, 404, { message: 'CV file not found' });
-    }
+    return "Soft deletion completed successfully";
   } catch (error) {
-    console.error('Error downloading CV:', error);
-    FailedApi(res, 500, { message: 'Internal server error' });
+    return error;
   }
 };
+
+const scheduleJob = () => {
+  cron.schedule("*/30 * * * *", async () => {
+    try {
+      const deletedJobs = await softDeleteRejectedJobs();
+      console.log(deletedJobs);
+    } catch (error) {
+      console.error("Error in cron job:", error);
+    }
+  });
+};
+
+const downloadCv = async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Fetch records from the database using the provided email
+    const user = await Job.findOne({
+      where: {
+        jobId: id
+      },
+    });
+    // Check if a user with the provided email exists
+    if (!user) {
+      return FailedApi(res, 404, "User Not Found");
+    }
+
+    // Define the path to the CV file in the uploads folder
+    const pdfPath = path.join(process.cwd(), 'uploads', `${user.email}.pdf`);
+
+    // Check if the file exists
+    try {
+      await fs.access(pdfPath);
+    } catch (error) {
+      return FailedApi(res, 404, "CV File Not Found");
+    }
+
+    // Define the destination path in the Downloads directory
+    const downloadPath = path.join(os.homedir(), 'Downloads', `${user.email}_CV.pdf`);
+
+    // Copy the CV file from the uploads folder to the Downloads directory
+    await fs.copyFile(pdfPath, downloadPath);
+
+    // Send a success message in the response
+    return SuccessApi(res, 200, { message: 'CV downloaded successfully to Downloads folder' });
+  } catch (error) {
+    console.error("Error downloading CV:", error);
+    return FailedApi(res, 500, { message: 'Internal server error' });
+  }
+};
+
+
+// const downloadCv = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     // Fetch records from the database using the provided email
+//     const user = await Job.findOne({
+//       where: {
+//         jobId: id
+//       },
+//     });
+//     // Check if a user with the provided email exists
+//     if (!user) {
+//       return FailedApi(res, 404, "User Not Found");
+//     }
+//     // Read the CV file associated with the user's email
+//     const pdfPath = `uploads/${user.email}.pdf`;
+//     const cvBuffer = fs.readFileSync(pdfPath);
+//     // Set the response headers for file download
+//     res.setHeader("Content-Type", "application/pdf");
+//     res.setHeader("Content-Disposition", `attachment; filename=${user.email}_CV.pdf`);
+//     // Send the CV file as a response
+//     res.send(cvBuffer);
+//   } catch (error) {
+//     console.error("Error downloading CV:", error);
+//     return FailedApi(res, 500, { message: 'Internal server error' });
+//   }
+// };
 
 
 export {
@@ -230,5 +298,6 @@ export {
   handleFileUpload,
   getAllapplicants,
   updateApplicantStatus,
-  downloadCv
+  downloadCv,
+  scheduleJob
 };

@@ -20,10 +20,10 @@ const ApiLogs = sequelize.define('ApiLog', {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    postmanToken: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
+    // postmanToken: {
+    //   type: DataTypes.STRING,
+    //   allowNull: false,
+    // },
     acceptEncoding: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -51,7 +51,7 @@ const apiLogJoiSchema = Joi.object({
     accept: Joi.string().required(),
     userAgent: Joi.string().required(),
     connection: Joi.string().required(),
-    postmanToken: Joi.string().required(),
+    // postmanToken: Joi.string().required(),
     acceptEncoding: Joi.string().required(),
     requestUrl: Joi.string().required(),
     requestMethod: Joi.string().required(),

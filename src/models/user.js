@@ -46,11 +46,11 @@ const User = sequelize.define('User', {
   timestamps: true,
 });
 
-User.prototype.isRememberTokenExpired = function() {
-  const currentTime = new Date().getTime();
-  const tokenExpiryTime = new Date(this.rememberTokenExpiry).getTime();
-  return currentTime > tokenExpiryTime;
-};
+// User.prototype.isRememberTokenExpired = function() {
+//   const currentTime = new Date().getTime();
+//   const tokenExpiryTime = new Date(this.rememberTokenExpiry).getTime();
+//   return currentTime > tokenExpiryTime;
+// };
 
 const userJoiSchema = Joi.object({
     firstName: Joi.string().min(3).max(25).required(),

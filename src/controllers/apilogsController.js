@@ -6,7 +6,7 @@ const apiDetails = async (req, res, next) => {
     requestUrl: req.url,
     accept: req.headers.accept,
     userAgent: req.headers["user-agent"],
-    postmanToken: req.headers["postman-token"],
+    // postmanToken: req.headers["postman-token"],
     acceptEncoding: req.headers["accept-encoding"],
     connection: req.headers.connection,
     requestBody: JSON.stringify({ body: req.body }), 

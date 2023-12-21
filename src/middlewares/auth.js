@@ -1,28 +1,32 @@
-import jwt from "jsonwebtoken";
-import {User} from "../models/user.js";
-import dotenv from "dotenv";
+import jwt from 'jsonwebtoken';
+import { User } from '../models/user.js';
+import dotenv from 'dotenv';
 dotenv.config();
 
-const authenticateMiddleware = async (req, res, next) => {
+const Secret_Key = process.env.SECRET_KEY;
+
+const authenticateUser = async (req, res, next) => {
     const token = req.headers.token;
+    // console.log(token)
     if (!token) {
-      return res.status(401).json({ error: "Unauthorized" });
+        return res.status(401).json({ message: 'Access denied. Token not provided.' });
     }
     try {
-      // Verify the token using your secret key
-      const decoded = jwt.verify(token, process.env.SECRET_KEY);
-      const user = await User.findOne({
-        where: { email: decoded.email },
-      });
-      if (!user) {
-        return res.status(401).json({ error: "Unauthorized - User not found" });
-      }
-      req.user = user;
-      next();
+        const decoded = jwt.verify(token, Secret_Key);
+        const user = await User.findOne({email: decoded.email});
+        // console.log(user)
+
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid token. User not found.' });
+        }
+        req.user = user;
+        if (user.isAdmin) {
+            req.isAdmin = true;
+        }
+        next();
     } catch (error) {
-      return res.status(401).json({ error: "Unauthorized - Invalid token" });
+        return res.status(401).json({ message: 'Invalid token.' });
     }
-  };
-  
-  
-export {authenticateMiddleware};
+};
+
+export {authenticateUser};

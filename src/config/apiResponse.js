@@ -2,7 +2,7 @@ function SuccessApi(res, statusCode, result, message = 'Data Fetched Successfull
     res.status(statusCode).json({
         status: 'Success',
         statusCode,
-        data: [result],
+        data: result,
         message,
     });
 }

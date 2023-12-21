@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import { User, validateUser } from '../models/user.js';
 import bcrypt from 'bcrypt';
 import { FailedApi, SuccessApi } from '../config/apiResponse.js';
@@ -22,9 +23,75 @@ function generateRandomToken() {
 }
 
 const setPasswordSchema = Joi.object({
-    password: Joi.string().min(6).required(),
-    confirmPassword: Joi.string().valid(Joi.ref("password")).required(),
+    password: Joi.string().min(8).required().pattern(new RegExp('^(?=.*?[a-z]).{8,}$')),
+    confirmPassword: Joi.string().min(8).required().pattern(new RegExp('^(?=.*?[a-z]).{8,}$')).valid(Joi.ref("password")),
 });
+
+async function getAllUsers(req, res) {
+    try {
+        const page = parseInt(req.query.page, 10) || 1;
+        const limit = parseInt(req.query.limit, 10) || 10;
+        const search = req.query.search || '';
+
+        const offset = (page - 1) * limit;
+
+        const whereClause = {
+            // Modify these fields according to your User model
+            [Op.or]: [
+                { firstName: { [Op.like]: `%${search}%` } },
+                { lastName: { [Op.like]: `%${search}%` } },
+                { email: { [Op.like]: `%${search}%` } },
+            ],
+        };
+        const users = await User.findAndCountAll({
+            where: whereClause,
+            offset,
+            limit,
+        });
+        if (!users || users.count === 0) {
+            return FailedApi(res, 404, { message: 'No user found' });
+        }
+
+        const totalPages = Math.ceil(users.count / limit);
+        const nextPage = page < totalPages;
+        const PreviousPage = page > 1;
+        const nextLink = nextPage ? `/api/get-all-users?page=${page + 1}&limit=${limit}&search=${search}` : null;
+        const prevLink = PreviousPage ? `/api/get-all-users?page=${page - 1}&limit=${limit}&search=${search}` : null;
+
+        // Modify the mappedUsers logic based on your User model fields
+        const mappedUsers = users.rows.map((user) => {
+            return {
+                userId: user.userId,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                isAdmin: user.isAdmin,
+                isVerified: user.isVerified,
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt,
+            };
+        });
+
+        res.status(200).json({
+            pagination: {
+                totalUsers: users.count,
+                page,
+                totalPages,
+                nextPage,
+                PreviousPage,
+                nextLink,
+                prevLink,
+            },
+            users: mappedUsers,
+        });
+        console.log("Get All Users Api Hit");
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+}
+
+
 
 const createUser = async (req, res, next) => {
     try {
@@ -65,15 +132,13 @@ const setPassword = async (req, res) => {
         if (error) {
             return FailedApi(res, 400, { message: "Validation error", error: error.details[0].message });
         }
-
         const { password, confirmPassword } = req.body;
         const { email } = req.params;
 
         if (!email) {
-            return FailedApi(res, 404, { message: "Email not provided" });
+            return FailedApi(res, 400, { message: "Email not provided" });
         }
-
-        // Find user by rememberToken
+        // Find user by email
         const user = await User.findOne({ where: { email: email } });
 
         if (!user) {
@@ -111,31 +176,7 @@ const setPassword = async (req, res) => {
     }
 };
 
-
-
-// const verification = async (req, res) => {
-//     try {
-//         const { token } = req.params;
-
-//         // Find user by rememberToken in MySQL using Sequelize
-//         const user = await User.findOne({ where: { rememberToken: token } });
-
-//         if (!user) {
-//             return FailedApi(res, 400, { message: "User not found" });
-//         }
-
-//         // Update rememberToken to null
-//         user.rememberToken = null;
-//         await user.save();
-
-//         return SuccessApi(res, 200, { message: "Email Verification Successful" });
-//     } catch (error) {
-//         return FailedApi(res, 401, { message: "Error occurred" });
-//     }
-// };
-
-
-
+// User LOGIN in Function
 const signin = async (req, res) => {
     const { email, password } = req.body;
 
@@ -153,35 +194,18 @@ const signin = async (req, res) => {
         }
 
         // Adjust payload for the token
-        const payload = { email: existingUser.email, id: existingUser.userId };
+        const payload = { email: existingUser.email, id: existingUser.userId, isAdmin: existingUser.isAdmin };
 
         // Generate JWT token
-        const token = jwt.sign(payload, Secret_Key);
+        const token = jwt.sign(payload, Secret_Key, { expiresIn: '30m' });
         console.log("User Login Successfully")
-        return SuccessApi(res, 200, { user: _.pick(existingUser, ['email']), token: token, message: "Login Successfully" });
+        const result = { user: _.pick(existingUser, ['isAdmin']), token, message: "Login Successfully" }
+        SuccessApi(res, 200, result);
     } catch (error) {
         console.error("Signin error:", error);
         return FailedApi(res, 500, { message: "Internal Server Error" });
     }
 };
-
-// const combinedVerificationAndPasswordSetup = async (req, res) => {
-//     try {
-//         const { token } = req.params;
-
-//         // Find user by rememberToken in MySQL using Sequelize
-//         const user = await User.findOne({ where: { rememberToken: token } });
-
-//         if (!user) {
-//             return res.status(400).json({ message: "Invalid token" });
-//         }
-
-//         // Redirect to password setup page
-//         return res.redirect(`http://192.168.11.218:8080/#/CreatePassword/?token=${token}`); // Replace with your password setup page URL
-//     } catch (error) {
-//         return res.status(500).json({ message: "Error occurred" });
-//     }
-// };
 
 const forgetPassword = async (req, res) => {
     try {
@@ -195,11 +219,11 @@ const forgetPassword = async (req, res) => {
         }
 
         // Set the reset token and expiry time for password reset
-        const expiryTime = new Date(Date.now() + 60 * 1000); // Set expiry to 24 hours from now
-        user.rememberTokenExpiry = expiryTime;
-        if (user.isRememberTokenExpired()) {
-            return FailedApi(res, 400, { message: "Token has expired" });
-        }
+        // const expiryTime = new Date(Date.now() + 60 * 1000); // Set expiry to 24 hours from now
+        // user.rememberTokenExpiry = expiryTime;
+        // if (user.isRememberTokenExpired()) {
+        //     return FailedApi(res, 400, { message: "Token has expired" });
+        // }
         await user.save();
 
         // Send email with the reset link to the user
@@ -211,8 +235,6 @@ const forgetPassword = async (req, res) => {
         return FailedApi(res, 500, { message: 'Internal server error' });
     }
 };
-
-
 
 const logUserActivity = async (req, res, next) => {
     try {
@@ -226,12 +248,13 @@ const logUserActivity = async (req, res, next) => {
             const userName = `${firstName} ${lastName}`;
 
             logData = {
-                action: 'User Creation',
+                action: 'User Creation Successfully',
                 username: userName,
                 userEmail: email,
                 details: `New user ${userName} (${email}) has been created`,
+                userAgent: req.headers["user-agent"]
             };
-            console.log('User Creation log action detected');
+            console.log('User Creation action detected by Admin');
         } else if (req.path === '/logIn' && req.method === 'POST') {
             // For user login
             const { email } = req.body;
@@ -246,9 +269,11 @@ const logUserActivity = async (req, res, next) => {
                     action: 'User Login',
                     username: userName,
                     userEmail: email,
-                    details: `User ${userName} with email ${email} logged in`,
+                    details: `User "${email}" jsut logged in Successfully`,
+                    userAgent: req.headers["user-agent"]
+
                 };
-                console.log('User Login log action detected');
+                console.log('User Login action detected');
             } else {
                 console.log(`User with email ${email} not found`);
             }
@@ -265,6 +290,8 @@ const logUserActivity = async (req, res, next) => {
                     username: userName,
                     userEmail: email,
                     details: `Password reset request initiated for email ${email}`,
+                    userAgent: req.headers["user-agent"]
+
                 };
                 console.log('Forget Password log action detected');
             } else {
@@ -272,11 +299,16 @@ const logUserActivity = async (req, res, next) => {
             }
         } else if (req.path.startsWith('/setPassword/') && req.method === 'POST') {
             // For set password
-            const { token } = req.params;
+            const { email } = req.params;
+            const user = await User.findOne({ where: { email } });
+            const userName = `${user.firstName} ${user.lastName}`;
 
             logData = {
                 action: 'Set Password',
-                details: `Password reset completed with token ${token}`,
+                username: userName,
+                userEmail: email,
+                details: `User ${userName} Just set the Password`,
+                userAgent: req.headers["user-agent"]
             };
             console.log('Set Password log action detected');
         } else {
@@ -286,10 +318,8 @@ const logUserActivity = async (req, res, next) => {
 
         res.on('finish', async () => {
             try {
-                logData.statusCode = res.statusCode;
-
                 if (res.statusCode >= 400 && res.statusCode <= 499) {
-                    logData.action = 'Client Error';
+                    logData.action = 'Client Side Error';
                     logData.details = `Client error encountered: ${res.statusMessage}`;
                 } else if (res.statusCode >= 500 && res.statusCode <= 599) {
                     logData.action = 'Server Error';
@@ -302,7 +332,6 @@ const logUserActivity = async (req, res, next) => {
                 console.error('Error creating log:', error);
             }
         });
-
         next();
     } catch (error) {
         console.error('Error logging user activity:', error);
@@ -310,12 +339,70 @@ const logUserActivity = async (req, res, next) => {
     }
 };
 
+const getAllLogs = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page, 10) || 1;
+        const limit = parseInt(req.query.limit, 10) || 5;
+        const search = req.query.search || '';
+        const offset = (page - 1) * limit;
+        // Build the where clause for filtering logs
+        const whereClause = {
+            [Op.or]: [
+                { username: { [Op.like]: `%${search}%` } },
+                { userEmail: { [Op.like]: `%${search}%` } },
+                { action: { [Op.like]: `%${search}%` } },
+                { details: { [Op.like]: `%${search}%` } },
+            ],
+        };
+
+        // Find logs based on the provided criteria
+        const logs = await ActivityLog.findAndCountAll({
+            where: whereClause,
+            offset,
+            limit,
+        });
+        if (!logs) {
+            return FailedApi(res, 404, {
+                status: 'failed',
+                message: 'No logs found based on the provided criteria.',
+            });
+        }
+        // Calculate pagination details
+        const totalPages = Math.ceil(logs.count / limit);
+        const nextPage = page < totalPages;
+        const PreviousPage = page > 1;
+        const nextLink = nextPage ? `/api/getAllLogs?page=${page + 1}&limit=${limit}&search=${search}` : null;
+        const prevLink = PreviousPage ? `/api/getAllLogs?page=${page - 1}&limit=${limit}&search=${search}` : null;
+
+        // Return the response with the retrieved data and pagination details
+        SuccessApi(res, 200, {
+            pagination: {
+                totalLogs: logs.count,
+                page,
+                totalPages,
+                nextPage,
+                PreviousPage,
+                nextLink,
+                prevLink,
+            },
+            data: logs.rows,
+            message: "User Logs Fetched Successfully"
+        });
+    } catch (error) {
+        // Handle any errors that occur during the process
+        FailedApi(res, 500, {
+            message: 'An error occurred while fetching logs.',
+            error: error.message,
+        });
+    }
+};
 
 export {
     createUser,
     logUserActivity,
     signin,
     setPassword,
-    // combinedVerificationAndPasswordSetup,
+    getAllUsers,
     forgetPassword,
+    getAllLogs
 };

@@ -13,7 +13,7 @@ const rejectionEmailQueue = new Queue('rejectionEmailQueue');
 emailQueue.process("sendVerificationEmail", async (job) => {
     try {
         const { user } = job.data;
-        const verificationLink = `http://localhost:3000/user/setPassword/${user.email}`;
+        const verificationLink = `http://localhost:8080/#/UserDashboard/ConfirmPass/${user.email}`;
 
         // Sending verification email
         console.log('Verification email Sent to:', user.email);
@@ -31,15 +31,65 @@ emailQueue.process("sendVerificationEmail", async (job) => {
             to: user.email,
             subject: 'Email Verification',
             html: `
-                <div style="background-color: #f4f4f4; padding: 20px;">
-                    <h2 style="color: #333;">Verify Your Email</h2>
-                    <p style="color: #666;">Please click the button below to verify your account:</p>
-                    <a href="${verificationLink}" style="text-decoration: none;">
-                        <div style="background-color: #3498db; color: white; padding: 10px 20px; border-radius: 5px; display: inline-block;">
-                            Verify Email
-                        </div>
-                    </a>
-                </div>
+            <!DOCTYPE html>
+            <html lang="en">
+            
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Set New Password</title>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                  margin: 0;
+                  padding: 0;
+                  background-color: #f4f4f4;
+                }
+            
+                .container {
+                  padding: 20px;
+                  background-color: #ffffff;
+                  border-radius: 5px;
+                  margin: 20px;
+                }
+            
+                h2 {
+                  color: #333;
+                  font-size: 20px;
+                  margin-bottom: 10px;
+                }
+            
+                p {
+                  color: #666;
+                  line-height: 1.5;
+                }
+            
+                .button {
+                  background-color: #3498db;
+                  color: #fff;
+                  padding: 10px 20px;
+                  border-radius: 5px;
+                  text-decoration: none;
+                  display: inline-block;
+                }
+              </style>
+            </head>
+            
+            <body>
+              <div class="container">
+                <h2>Set Your New Password</h2>
+                <p>Hi [User Name],</p>
+                <p>To set your new password, click the button below:</p>
+                <a href="${verificationLink}" class="button">Set New Password</a>
+                <p>This link will expire in [number] hours for your security.</p>
+                <p>If you didn't request a password reset, please disregard this email.</p>
+                <p>For any assistance, contact our support team at [support email address].</p>
+                <p>Best regards,</p>
+                <p>The [Company Name] Team</p>
+              </div>
+            </body>
+            
+            </html>
             `,
         });
         console.log('Verification email sent successfully.');
@@ -76,8 +126,9 @@ emailQueue.process("sendVerificationEmail", async (job) => {
 forgotPasswordQueue.process('sendPasswordResetEmail', async (job) => {
     try {
         const { user } = job.data;
-
-        const resetPasswordLink = `http://192.168.11.172:3000/user/setPassword/${user.email}`;
+        const { firstName, lastName } = user;
+        const userName = `${firstName} ${lastName}`
+        const resetPasswordLink = `http://localhost:8080/#/UserDashboard/ConfirmPass/${user.email}`;
 
         // Sending the password reset email
         await transporter.sendMail({
@@ -85,12 +136,95 @@ forgotPasswordQueue.process('sendPasswordResetEmail', async (job) => {
             to: user.email,
             subject: 'Password Reset',
             html: `
-          <p>Dear User,</p>
-          <p>Please click the following link to reset your password:</p>
-          <p><a href="${resetPasswordLink}">Reset Password</a></p>
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Developer Studio Password Reset</title>
+            <style>
+                body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                background-color: #f7f7f7;
+                }
+
+                .container {
+                padding: 20px;
+                background-color: #ffffff;
+                border-radius: 8px;
+                margin: 20px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                }
+
+                h2 {
+                color: #333;
+                font-size: 24px;
+                margin-bottom: 12px;
+                }
+
+                p {
+                color: #666;
+                line-height: 1.6;
+                margin-bottom: 10px;
+                }
+
+                a {
+                text-decoration: none;
+                }
+
+                .button {
+                display: inline-block;
+                padding: 12px 24px;
+                border-radius: 5px;
+                background-color: #3498db;
+                color: #fff;
+                font-size: 16px;
+                transition: background-color 0.3s ease;
+                }
+
+                .button:hover {
+                background-color: #258cd1;
+                }
+
+                ul {
+                list-style: none;
+                padding-left: 0;
+                }
+
+                ul li {
+                margin-bottom: 8px;
+                }
+            </style>
+            </head>
+
+            <body>
+            <div class="container">
+                <h2>Secure Your Developer Studio Account</h2>
+                <p>Hi [${userName}],</p>
+                <p>We recently detected a request to reset your password for your [Developer Studio] account. If you made this request, please click the button below to choose a new, secure password:</p>
+                <a href="${resetPasswordLink}" style="text-decoration: none;">
+                <div class="button">Reset Password</div>
+                </a>
+                <p>This link will expire in 24 hours for your security. If you didn't request a password reset, please don't worry! Your account remains safe.</p>
+                <p><strong>Why did you receive this email?</strong></p>
+                <p>We take the security of your Developer Studio account very seriously. We only send password reset emails when someone requests one. This helps to protect your account from unauthorized access.</p>
+                <p><strong>Keeping your [Developer Studio] account secure:</strong></p>
+                <ul>
+                <li>Choose a strong password: Use a mix of upper and lowercase letters, numbers, and symbols. Aim for at least 12 characters.</li>
+                <li>Don't reuse passwords: Avoid using the same password for multiple accounts.</li>
+                <li>Enable two-factor authentication: This adds an extra layer of security to your account.</li>
+                </ul>
+                <p>If you have any questions or concerns, please don't hesitate to contact our support team at [support email address].</p>
+                <p>Sincerely,</p>
+                <p>The Developer Studio Team</p>
+            </div>
+            </body>
+
+            </html>
         `,
         });
-
         console.log('Password reset email sent successfully');
     } catch (error) {
         console.error('Error sending password reset email:', error);
@@ -100,7 +234,7 @@ forgotPasswordQueue.process('sendPasswordResetEmail', async (job) => {
 
 
 // Process the task of sending rejection emails
-rejectionEmailQueue.process('rejectionEmailQueue', async(job) => {
+rejectionEmailQueue.process('rejectionEmailQueue', async (job) => {
     try {
         const email = job.data.user;
         const userName = job.data.user;
@@ -127,4 +261,8 @@ rejectionEmailQueue.process('rejectionEmailQueue', async(job) => {
 
 
 
-export { emailQueue, forgotPasswordQueue, rejectionEmailQueue };
+export {
+    emailQueue,
+    forgotPasswordQueue,
+    rejectionEmailQueue
+};
