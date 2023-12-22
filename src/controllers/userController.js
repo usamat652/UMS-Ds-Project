@@ -204,6 +204,36 @@ const signin = async (req, res) => {
     }
 };
 
+const changePassword = async (req, res) => {
+    try {
+      const { email,oldPassword ,newPassword,confirmPassword } = req.body;
+      if (email) {
+        const user = await User.findOne({
+          where: {
+            email: email,
+          },
+        });
+        await bcrypt.compare(oldPassword , user.password);
+        if (newPassword !== confirmPassword) {
+          return FailedApi(res, 400, "Password does not match");
+        }
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        // Update the user's password
+        await User.update(
+          { password: hashedPassword },
+          { where: { email: user.email } }
+        );
+        // Send a success response
+        return SuccessApi(res, 200,{message:"Password change successfully"});
+      } else {
+        return FailedApi(res, 500, "Email not found");
+      }
+    } catch (error) {
+      // Send an error response
+      return FailedApi(res, 500, {message: error.message});
+    }
+  };
+
 const forgetPassword = async (req, res) => {
     try {
         const { email } = req.body;
@@ -308,7 +338,22 @@ const logUserActivity = async (req, res, next) => {
                 userAgent: req.headers["user-agent"]
             };
             console.log('Set Password log action detected');
-        } else {
+        } else if (req.path.startsWith('/change-password') && req.method === 'POST') {
+            // For set password
+            const { email } = req.body;
+            const user = await User.findOne({ where: { email } });
+            const userName = `${user.firstName} ${user.lastName}`;
+
+            logData = {
+                action: 'Change Password',
+                username: userName,
+                userEmail: email,
+                details: `User ${userName} Just change their Password`,
+                userAgent: req.headers["user-agent"]
+            };
+            console.log('Change Password log action detected');
+        } 
+        else {
             // If the route doesn't match any specific path or method, proceed to next middleware
             return next();
         }
@@ -399,6 +444,7 @@ export {
     logUserActivity,
     signin,
     setPassword,
+    changePassword,
     getAllUsers,
     forgetPassword,
     getAllLogs

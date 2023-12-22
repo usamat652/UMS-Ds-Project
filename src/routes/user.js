@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+    changePassword,
     // combinedVerificationAndPasswordSetup,
     createUser,
     forgetPassword,
@@ -18,6 +19,7 @@ const userRouter = express.Router();
 userRouter.post('/createUser', logUserActivity,isAdminMiddleware, createUser);
 userRouter.post('/logIn', logUserActivity, signin);
 userRouter.post('/forget-password', logUserActivity, forgetPassword);
+userRouter.post('/change-password', logUserActivity, changePassword);
 userRouter.post('/setPassword/:email', logUserActivity, setPassword);
 userRouter.get('/get-all-users', isAdminMiddleware, getAllUsers);
 userRouter.get('/get-all-logs', getAllLogs);
