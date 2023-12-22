@@ -11,6 +11,7 @@ import {
     signin,
 } from '../controllers/userController.js';
 import { isAdminMiddleware } from '../middlewares/adminAuth.js';
+import { authenticateUser } from '../middlewares/auth.js';
 // import { OpenAi } from '../chatbotSocket.js/gptSocket.js';
 // import { authenticateUser } from '../middlewares/auth.js';
 
@@ -19,7 +20,7 @@ const userRouter = express.Router();
 userRouter.post('/createUser', logUserActivity,isAdminMiddleware, createUser);
 userRouter.post('/logIn', logUserActivity, signin);
 userRouter.post('/forget-password', logUserActivity, forgetPassword);
-userRouter.post('/change-password', logUserActivity, changePassword);
+userRouter.post('/change-password', authenticateUser, changePassword);
 userRouter.post('/setPassword/:email', logUserActivity, setPassword);
 userRouter.get('/get-all-users', isAdminMiddleware, getAllUsers);
 userRouter.get('/get-all-logs', getAllLogs);

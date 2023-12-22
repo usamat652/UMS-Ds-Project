@@ -196,7 +196,7 @@ const signin = async (req, res) => {
         // Generate JWT token
         const token = jwt.sign(payload, Secret_Key, { expiresIn: '30m' });
         console.log("User Login Successfully")
-        const result = { user: _.pick(existingUser, ['isAdmin']), token, message: "Login Successfully" }
+        const result = { user: _.pick(existingUser, ['email', 'isAdmin']), token, message: "Login Successfully" }
         SuccessApi(res, 200, result);
     } catch (error) {
         console.error("Signin error:", error);
@@ -204,35 +204,76 @@ const signin = async (req, res) => {
     }
 };
 
+// const changePassword = async (req, res) => {
+//     try {
+//       const { email,oldPassword ,newPassword,confirmPassword } = req.body;
+//       if (email) {
+//         const user = await User.findOne({
+//           where: {
+//             email: email,
+//           },
+//         });
+//         await bcrypt.compare(oldPassword , user.password);
+//         if (newPassword !== confirmPassword) {
+//           return FailedApi(res, 400, "Password does not match");
+//         }
+//         const hashedPassword = await bcrypt.hash(newPassword, 10);
+//         // Update the user's password
+//         await User.update(
+//           { password: hashedPassword },
+//           { where: { email: user.email } }
+//         );
+//         // Send a success response
+//         return SuccessApi(res, 200,{message:"Password change successfully"});
+//       } else {
+//         return FailedApi(res, 500, "Email not found");
+//       }
+//     } catch (error) {
+//       // Send an error response
+//       return FailedApi(res, 500, {message: error.message});
+//     }
+//   };
+
+
 const changePassword = async (req, res) => {
     try {
-      const { email,oldPassword ,newPassword,confirmPassword } = req.body;
+      const token = req.headers.authorization.split(" ")[1];
+      const decode = jwt.verify(token, Secret_Key);
+      const email = decode.email;
+
+      const { oldPassword, newPassword, confirmPassword } = req.body;
       if (email) {
         const user = await User.findOne({
           where: {
             email: email,
           },
         });
-        await bcrypt.compare(oldPassword , user.password);
-        if (newPassword !== confirmPassword) {
-          return FailedApi(res, 400, "Password does not match");
+        if (!user) {
+          return FailedApi(res, 404, 'User not found');
         }
+  
+        const isPasswordCorrect = await bcrypt.compare(oldPassword, user.password);
+        if (!isPasswordCorrect) {
+          return FailedApi(res, 400, 'Incorrect old password');
+        }
+  
+        if (newPassword !== confirmPassword) {
+          return FailedApi(res, 400, 'Passwords do not match');
+        }
+  
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         // Update the user's password
-        await User.update(
-          { password: hashedPassword },
-          { where: { email: user.email } }
-        );
+        await User.update({ password: hashedPassword }, { where: { email: email } });
+  
         // Send a success response
-        return SuccessApi(res, 200,{message:"Password change successfully"});
-      } else {
-        return FailedApi(res, 500, "Email not found");
+        return SuccessApi(res, 200, { message: 'Password changed successfully' });
       }
     } catch (error) {
       // Send an error response
-      return FailedApi(res, 500, {message: error.message});
+      return FailedApi(res, 500, { message: error.message });
     }
   };
+  
 
 const forgetPassword = async (req, res) => {
     try {

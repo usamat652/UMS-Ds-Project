@@ -13,7 +13,7 @@ const rejectionEmailQueue = new Queue('rejectionEmailQueue');
 emailQueue.process("sendVerificationEmail", async (job) => {
     try {
         const { user } = job.data;
-        const verificationLink = `http://localhost:8080/#/UserDashboard/ConfirmPass/${user.email}`;
+        const verificationLink = `http://localhost:8080/#/ConfirmPass/${user.email}`;
 
         // Sending verification email
         console.log('Verification email Sent to:', user.email);
@@ -128,7 +128,7 @@ forgotPasswordQueue.process('sendPasswordResetEmail', async (job) => {
         const { user } = job.data;
         const { firstName, lastName } = user;
         const userName = `${firstName} ${lastName}`
-        const resetPasswordLink = `http://localhost:8080/#/UserDashboard/ConfirmPass/${user.email}`;
+        const resetPasswordLink = `http://localhost:8080/#/ConfirmPass/${user.email}`;
 
         // Sending the password reset email
         await transporter.sendMail({
