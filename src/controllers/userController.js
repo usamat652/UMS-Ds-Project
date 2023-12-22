@@ -91,8 +91,6 @@ async function getAllUsers(req, res) {
     }
 }
 
-
-
 const createUser = async (req, res, next) => {
     try {
         const { firstName, lastName, email } = req.body;
@@ -187,10 +185,9 @@ const signin = async (req, res) => {
         if (!existingUser) {
             return FailedApi(res, 404, { message: "User Not Found" });
         }
-
         const comparePassword = await bcrypt.compare(password, existingUser.password);
         if (!comparePassword) {
-            return FailedApi(res, 400, { message: "Password Did Not Match" });
+            return FailedApi(res, 400, { message: "Invalid Email or Password" });
         }
 
         // Adjust payload for the token

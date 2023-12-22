@@ -1,6 +1,4 @@
 import axios from "axios";
-import { Prompt } from "../models/openAi";
-
 
 const userRequest = async (req, res) => {
   try {
