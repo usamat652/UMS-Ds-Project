@@ -1,36 +1,38 @@
+import express from "express";
+import bodyParser from "body-parser";
 import axios from "axios";
+const app = express();
+app.use(express.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 
-const userRequest = async (req, res) => {
-  try {
-    const openaiEndpoint = "https://api.openai.com/v1/chat/completions";
-    const openaiApiKey = "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"; 
-
-    const response = await axios.post(
-      openaiEndpoint,
-      {
-        messages: [{ role: "user", content: req.body.question }],
-        model: "gpt-3.5-turbo",
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openaiApiKey}`,
+const userRequest=async(msg)=>{
+    try {
+      const openaiEndpoint = "https://api.openai.com/v1/chat/completions";
+      //const openaiApiKey = "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"; // OpenAI API key
+        const openaiApiKey = "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"
+      const response = await axios.post(
+        openaiEndpoint,
+        {
+          messages: [{ role: "user", content: msg }],
+          model: "gpt-3.5-turbo",
         },
-      }
-    );
-
-    if (response && response.data && response.data.choices && response.data.choices.length > 0) {
-      return response.data.choices[0].message.content;
-    } else {
-      throw new Error("Invalid response from OpenAI API");
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${openaiApiKey}`,
+          },
+        }
+      );
+      return (response.data.choices[0].message.content);
+    } catch (error) {
+      console.error("Error:", error.message);
+      return (error.message);
     }
-  } catch (error) {
-    console.error("Error:", error.message);
-    throw error; 
-  }
-};
+}
+export default userRequest
 
-export default userRequest;
+
 
 
 

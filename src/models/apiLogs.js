@@ -55,8 +55,8 @@ const apiLogJoiSchema = Joi.object({
     acceptEncoding: Joi.string().required(),
     requestUrl: Joi.string().required(),
     requestMethod: Joi.string().required(),
-    requestBody: Joi.string().allow(null), // Adjust validation for requestBody as per your requirements
-    statusCode: Joi.number().integer().allow(null), // Allow null if statusCode is optional
+    requestBody: Joi.string().allow(null),
+    statusCode: Joi.number().integer().allow(null), 
   });
   
 

@@ -18,7 +18,7 @@ const apiDetails = async (req, res, next) => {
 
     try {
       // Validate the log data before creating the log entry
-      await validateApiLog(logData);
+      validateApiLog(logData);
       await ApiLogs.create(logData);
     //   console.log('Log entry saved successfully:', createdLog.toJSON());
     } catch (error) {

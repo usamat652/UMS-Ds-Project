@@ -130,6 +130,7 @@ const setPassword = async (req, res) => {
         if (error) {
             return FailedApi(res, 400, { message: "Validation error", error: error.details[0].message });
         }
+        
         const { password, confirmPassword } = req.body;
         const { email } = req.params;
 

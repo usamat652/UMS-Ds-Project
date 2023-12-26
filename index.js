@@ -6,6 +6,10 @@ import userRouter from './src/routes/user.js';
 import apiDetails from './src/controllers/apilogsController.js';
 import cors from 'cors'
 import JobRouter from './src/routes/job.js';
+import { Server } from "socket.io";
+import userRequest from "./src/chatbotSocket.js/gptSocket.js";
+import { Prompt } from './src/models/openAi.js';
+import http from 'http';
 import { scheduleJob } from './src/controllers/jobController.js';
 
 dotenv.config();
@@ -30,10 +34,37 @@ app.use(cors())
 app.use(apiDetails)
 // app.use(logRequestDetails)
 
-app.use('/api', userRouter)
-app.use('/api', JobRouter)
 
+
+app.use('/api', userRouter);
+app.use('/api', JobRouter);
+
+
+const server = http.createServer(app);
+const io = new Server(server);
+io.on("connection", (socket) => {
+    console.log("A user connected");
+    // Listen for chat messages from clients
+    socket.on("chat message", async (msg) => {
+      console.log("Message received from client: " + msg);
+      try {
+        // Send user's message to OpenAI GPT-3.5 Turbo
+        const gptResponse = await userRequest(msg);
+        // Emit the GPT response back to the specific client
+        io.emit("chat message", { message: gptResponse, user: "bot" });
+        // Save the chat message to the database
+        await Prompt.create({
+          question: msg,
+          gptResponse,
+        });
+      } catch (error) {
+        console.error("Error processing chat message:", error);
+        // Handle the error (e.g., emit an error message to the client)
+        io.emit("chat message", "Error processing your message");
+      }
+    });
+  });
 const host = process.env.HOST
-app.listen(PORT, host, () => {
+server.listen(PORT, () => {
     console.log(`Server is running on http://${host}:${PORT}`);
 });

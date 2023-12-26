@@ -12,6 +12,7 @@ import {
 } from '../controllers/userController.js';
 import { isAdminMiddleware } from '../middlewares/adminAuth.js';
 import { authenticateUser } from '../middlewares/auth.js';
+import userRequest from '../chatbotSocket.js/gptSocket.js';
 // import { OpenAi } from '../chatbotSocket.js/gptSocket.js';
 // import { authenticateUser } from '../middlewares/auth.js';
 
@@ -24,7 +25,7 @@ userRouter.post('/change-password', authenticateUser, changePassword);
 userRouter.post('/setPassword/:email', logUserActivity, setPassword);
 userRouter.get('/get-all-users', isAdminMiddleware, getAllUsers);
 userRouter.get('/get-all-logs', getAllLogs);
-// userRouter.post('/gpt-response', OpenAi);
+userRouter.post('/gpt-response', userRequest);
 // userRouter.get('/verify-and-set-password/:token', combinedVerificationAndPasswordSetup);
 
 
