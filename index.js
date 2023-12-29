@@ -7,7 +7,7 @@ import apiDetails from './src/controllers/apilogsController.js';
 import cors from 'cors'
 import JobRouter from './src/routes/job.js';
 import { Server } from "socket.io";
-import userRequest from "./src/chatbotSocket.js/gptSocket.js";
+import userRequest from "./src/Sockets/gptSocket.js";
 import { Prompt } from './src/models/openAi.js';
 import http from 'http';
 import { scheduleJob } from './src/controllers/jobController.js';
@@ -43,7 +43,7 @@ app.use('/api', JobRouter);
 const server = http.createServer(app);
 const io = new Server(server);
 io.on("connection", (socket) => {
-    console.log("A user connected");
+    console.log("User CONNECTED Successful");
     // Listen for chat messages from clients
     socket.on("chat message", async (msg) => {
       console.log("Message received from client: " + msg);
@@ -51,7 +51,7 @@ io.on("connection", (socket) => {
         // Send user's message to OpenAI GPT-3.5 Turbo
         const gptResponse = await userRequest(msg);
         // Emit the GPT response back to the specific client
-        io.emit("chat message", { message: gptResponse, user: "bot" });
+        io.emit("chat message", gptResponse);
         // Save the chat message to the database
         await Prompt.create({
           question: msg,
@@ -65,6 +65,6 @@ io.on("connection", (socket) => {
     });
   });
 const host = process.env.HOST
-server.listen(PORT, () => {
+server.listen(PORT, host, () => {
     console.log(`Server is running on http://${host}:${PORT}`);
 });

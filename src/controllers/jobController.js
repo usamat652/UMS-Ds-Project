@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
 import fs2 from 'fs';
 import { Op } from 'sequelize';
-import { FailedApi, SuccessApi } from '../config/apiResponse.js';
+import { FailedApi, SuccessApi } from '../helper/apiResponse.js';
 import os from 'os';
 
 
@@ -46,10 +46,10 @@ const handleFileUpload = (req, res, next) => {
 // }
 const submitForm = async (req, res) => {
   try {
-    // const { error } = JobValidationSchema(req.body);
-    //     if (error) {
-    //         return FailedApi(res, 400, { message: "Validation error", error: error.details[0].message });
-    //     }
+    const { error } = JobValidationSchema(req.body);
+    if (error) {
+      return FailedApi(res, 400, { message: "Validation error", error: error.details[0].message });
+    }
     const {
       userName,
       email,
@@ -62,10 +62,9 @@ const submitForm = async (req, res) => {
       isDelete = false,
     } = req.body;
     let cvPath = '';
-    if (req.file ) {
+    if (req.file) {
       cvPath = req.file.path;
     }
-    // const cvPath = req.file ? req.file.path : ''; // Check if the file was uploaded
 
     // Create a new job applicant
     const newApplicant = await Job.create({
@@ -163,6 +162,13 @@ const updateApplicantStatus = async (req, res) => {
   const { status } = req.body;
 
   try {
+    const allowedStatusValues = ['pending', 'accepted', 'rejected'];
+
+    // Validate if the provided status is in the allowed values
+    if (!allowedStatusValues.includes(status.toLowerCase())) {
+      return FailedApi(res, 400, { error: 'Invalid status value' });
+    }
+
     const applicant = await Job.findOne({
       where: { jobId: id },
     });
@@ -171,60 +177,53 @@ const updateApplicantStatus = async (req, res) => {
       return FailedApi(res, 404, { error: 'Applicant not found' });
     }
 
-    applicant.status = status;
+    applicant.status = status.toLowerCase(); // Normalize status to lowercase
     await applicant.save();
 
-    if (status === 'rejected' || 'Rejected') {
-      // Add the task to the Bull rejectionEmailQueue
-
+    if (status.toLowerCase() === 'rejected') {
       // Update applicant status and send response
-      applicant.status = status;
-      await applicant.save();
       await rejectionEmailQueue.add('rejectionEmailQueue', { user: applicant });
-    } else if(status === 'accepted'){
-        applicant.status = status;
-        await applicant.save();
-        res.status(200).json({ message: 'Applicant has been accepted.' });
-      }
-      return SuccessApi(res, 200, {
-        status: 'Application Rejected',
-        data: applicant,
-      });
+      return SuccessApi(res, 200, { message: "Rejected Application Email has been Sent to Applicant's Email." });
 
-    // If status is not 'rejected', send 'Application Accepted' response
-    return SuccessApi(res, 200, {
-      status: 'Application Accepted',
-      data: applicant,
-    });
+    } else if (status.toLowerCase() === 'accepted') {
+      return SuccessApi(res, 200, { message: 'Applicant has been accepted.' });
+    }
   } catch (error) {
     console.error('Error:', error);
     return FailedApi(res, 500, { error: 'Internal Server Error' });
   }
 };
 
-const softDeleteRejectedJobs = async () => {
-  try {
-    const result = await Job.destroy({
-      where: {
-        status: 'rejected'
-      }
-    });
-    return "Soft deletion completed successfully";
-  } catch (error) {
-    return error;
-  }
-};
 
 const scheduleJob = () => {
-  cron.schedule("*/30 * * * *", async () => {
+
+  cron.schedule("*/2 * * * *", async () => {
     try {
-      const deletedJobs = await softDeleteRejectedJobs();
-      console.log(deletedJobs);
+      // Find all jobs that are rejected
+      const rejectedJobs = await Job.findAll({
+        where: {
+          status: 'rejected'
+        }
+      });
+
+      if (rejectedJobs && rejectedJobs.length > 0) {
+        // Soft delete rejected jobs
+        const result = await Job.destroy({
+          where: {
+            status: 'rejected'
+          }
+        });
+        console.log(`Soft deletion completed successfully. ${result} jobs deleted.`);
+      } else {
+        console.log("No rejected jobs found to delete.");
+      }
     } catch (error) {
       console.error("Error in cron job:", error);
     }
   });
 };
+
+
 
 const downloadCv = async (req, res) => {
   try {
@@ -268,29 +267,51 @@ const downloadCv = async (req, res) => {
 // const downloadCv = async (req, res) => {
 //   try {
 //     const { id } = req.params;
-//     // Fetch records from the database using the provided email
+
+//     // Fetch records from the database using the provided ID
 //     const user = await Job.findOne({
 //       where: {
 //         jobId: id
 //       },
 //     });
-//     // Check if a user with the provided email exists
+
+//     // Check if a user with the provided ID exists
 //     if (!user) {
-//       return FailedApi(res, 404, "User Not Found");
+//       return FailedApi(res, 404, 'User not found');
 //     }
-//     // Read the CV file associated with the user's email
-//     const pdfPath = `uploads/${user.email}.pdf`;
+
+//     const pdfPath = path.join(process.cwd(), 'uploads', `${user.email}.pdf`);
+
+//     // Check if the file exists at the specified path
+//     let fileExists = false;
+//     try {
+//       fs.accessSync(pdfPath);
+//       fileExists = true;
+//     } catch (err) {
+//       fileExists = false;
+//     }
+
+//     if (!fileExists) {
+//       return FailedApi(res, 404, 'CV File Not Found');
+//     }
+
+//     // Read the content of the CV file
 //     const cvBuffer = fs.readFileSync(pdfPath);
+
 //     // Set the response headers for file download
-//     res.setHeader("Content-Type", "application/pdf");
-//     res.setHeader("Content-Disposition", `attachment; filename=${user.email}_CV.pdf`);
-//     // Send the CV file as a response
+//     res.setHeader('Content-Type', 'application/pdf');
+//     res.setHeader('Content-Disposition', `attachment; filename=${user.email}_CV.pdf`);
+
+//     // Send the CV file data as a response
 //     res.send(cvBuffer);
 //   } catch (error) {
-//     console.error("Error downloading CV:", error);
+//     console.error('Error downloading CV:', error);
 //     return FailedApi(res, 500, { message: 'Internal server error' });
 //   }
 // };
+
+
+
 
 
 export {

@@ -13,7 +13,9 @@ const rejectionEmailQueue = new Queue('rejectionEmailQueue');
 emailQueue.process("sendVerificationEmail", async (job) => {
     try {
         const { user } = job.data;
-        const verificationLink = `http://localhost:8080/#/ConfirmPass/${user.email}`;
+        const { firstName, lastName } = user;
+        const userName = `${firstName} ${lastName}`
+        const verificationLink = `http://192.168.11.248:8080/#/ConfirmPass/${user.email}`;
 
         // Sending verification email
         console.log('Verification email Sent to:', user.email);
@@ -27,7 +29,7 @@ emailQueue.process("sendVerificationEmail", async (job) => {
         });
 
         await transporter.sendMail({
-            from: 'jt7357890@gmail.com',
+            from: 'usamatariq0320@gmail.com',
             to: user.email,
             subject: 'Email Verification',
             html: `
@@ -78,14 +80,14 @@ emailQueue.process("sendVerificationEmail", async (job) => {
             <body>
               <div class="container">
                 <h2>Set Your New Password</h2>
-                <p>Hi [User Name],</p>
+                <p>Hi ${userName},</p>
                 <p>To set your new password, click the button below:</p>
                 <a href="${verificationLink}" class="button">Set New Password</a>
                 <p>This link will expire in [number] hours for your security.</p>
                 <p>If you didn't request a password reset, please disregard this email.</p>
                 <p>For any assistance, contact our support team at [support email address].</p>
                 <p>Best regards,</p>
-                <p>The [Company Name] Team</p>
+                <p>The Developer Studio Team</p>
               </div>
             </body>
             
@@ -128,11 +130,11 @@ forgotPasswordQueue.process('sendPasswordResetEmail', async (job) => {
         const { user } = job.data;
         const { firstName, lastName } = user;
         const userName = `${firstName} ${lastName}`
-        const resetPasswordLink = `http://localhost:8080/#/ConfirmPass/${user.email}`;
+        const resetPasswordLink = `http://192.168.11.248:8080/#/ConfirmPass/${user.email}`;
 
         // Sending the password reset email
         await transporter.sendMail({
-            from: 'jt7357890@gmail.com',
+            from: 'usamatariq0320@gmail.com',
             to: user.email,
             subject: 'Password Reset',
             html: `
@@ -246,7 +248,7 @@ rejectionEmailQueue.process('rejectionEmailQueue', async (job) => {
     `;
 
         await transporter.sendMail({
-            from: 'jt7357890@gmail.com',
+            from: 'usamatariq0320@gmail.com',
             to: email,
             subject: 'Application Status',
             html: rejectionMessage,

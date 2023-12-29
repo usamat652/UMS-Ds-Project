@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-import { FailedApi } from '../config/apiResponse.js';
+import { FailedApi } from '../helper/apiResponse.js';
 dotenv.config();
 
 

@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import { User, validateUser } from '../models/user.js';
 import bcrypt from 'bcrypt';
-import { FailedApi, SuccessApi } from '../config/apiResponse.js';
+import { FailedApi, SuccessApi } from '../helper/apiResponse.js';
 import { emailQueue, forgotPasswordQueue } from '../services/emailService.js';
 import { ActivityLog } from '../models/activitylogs.js';
 import _ from 'lodash';
@@ -23,14 +23,15 @@ function generateRandomToken() {
 }
 
 const setPasswordSchema = Joi.object({
-    password: Joi.string().min(8).required().pattern(new RegExp('^(?=.*?[a-z]).{8,}$')),
-    confirmPassword: Joi.string().min(8).required().pattern(new RegExp('^(?=.*?[a-z]).{8,}$')).valid(Joi.ref("password")),
+    oldPassword: Joi.string().min(8).pattern(new RegExp('^(?=.*?[a-z\\s]).{8,}$')),
+    password: Joi.string().min(8).required().pattern(new RegExp('^(?=.*?[a-z\\s]).{8,}$')),
+    confirmPassword: Joi.string().min(8).required().pattern(new RegExp('^(?=.*?[a-z\\s]).{8,}$')).valid(Joi.ref("password")),
 });
 
 async function getAllUsers(req, res) {
     try {
         const page = parseInt(req.query.page, 10) || 1;
-        const limit = parseInt(req.query.limit, 10) || 10;
+        const limit = parseInt(req.query.limit, 10) || 1000;
         const search = req.query.search || '';
 
         const offset = (page - 1) * limit;
@@ -130,7 +131,7 @@ const setPassword = async (req, res) => {
         if (error) {
             return FailedApi(res, 400, { message: "Validation error", error: error.details[0].message });
         }
-        
+
         const { password, confirmPassword } = req.body;
         const { email } = req.params;
 
@@ -164,8 +165,8 @@ const setPassword = async (req, res) => {
         await user.update({
             password: hashedPassword,
             isVerified: true,
-            rememberToken: null, // Clear the remember token after successful password change
-            rememberTokenExpiry: null, // Clear the expiry timestamp
+            rememberToken: null, 
+            rememberTokenExpiry: null, 
         });
 
         return SuccessApi(res, 200, { message: "Password set successfully" });
@@ -195,7 +196,7 @@ const signin = async (req, res) => {
         const payload = { email: existingUser.email, id: existingUser.userId, isAdmin: existingUser.isAdmin };
 
         // Generate JWT token
-        const token = jwt.sign(payload, Secret_Key, { expiresIn: '30m' });
+        const token = jwt.sign(payload, Secret_Key, { expiresIn: '1d' });
         console.log("User Login Successfully")
         const result = { user: _.pick(existingUser, ['email', 'isAdmin']), token, message: "Login Successfully" }
         SuccessApi(res, 200, result);
@@ -207,7 +208,7 @@ const signin = async (req, res) => {
 
 // const changePassword = async (req, res) => {
 //     try {
-//       const { email,oldPassword ,newPassword,confirmPassword } = req.body;
+//       const { email,oldPassword ,password,confirmPassword } = req.body;
 //       if (email) {
 //         const user = await User.findOne({
 //           where: {
@@ -238,43 +239,50 @@ const signin = async (req, res) => {
 
 const changePassword = async (req, res) => {
     try {
-      const token = req.headers.authorization.split(" ")[1];
-      const decode = jwt.verify(token, Secret_Key);
-      const email = decode.email;
+        const { error } = setPasswordSchema.validate(req.body);
+        if (error) {
+            return FailedApi(res, 400, { message: "Validation error", error: error.details[0].message });
+        }
+        const token = req.headers.authorization.split(" ")[1];
+        const decode = jwt.verify(token, Secret_Key);
+        const email = decode.email;
+        const { oldPassword, password, confirmPassword } = req.body;
+        if (email) {
+            const user = await User.findOne({
+                where: {
+                    email: email,
+                },
+            });
+            if (!user) {
+                return FailedApi(res, 404, 'User not found');
+            }
 
-      const { oldPassword, newPassword, confirmPassword } = req.body;
-      if (email) {
-        const user = await User.findOne({
-          where: {
-            email: email,
-          },
-        });
-        if (!user) {
-          return FailedApi(res, 404, 'User not found');
+            const isPasswordCorrect = await bcrypt.compare(oldPassword, user.password);
+            if (!isPasswordCorrect) {
+                return FailedApi(res, 400, 'Incorrect old password');
+            }
+
+            if (password === oldPassword) {
+                return FailedApi(res, 400, 'New password cannot be the same as the old password');
+              }
+
+            if (password !== confirmPassword) {
+                return FailedApi(res, 400, 'Passwords do not match');
+            }
+
+            const hashedPassword = await bcrypt.hash(password, 10);
+            // Update the user's password
+            await User.update({ password: hashedPassword }, { where: { email: email } });
+
+            // Send a success response
+            return SuccessApi(res, 200, { message: 'Password changed successfully' });
         }
-  
-        const isPasswordCorrect = await bcrypt.compare(oldPassword, user.password);
-        if (!isPasswordCorrect) {
-          return FailedApi(res, 400, 'Incorrect old password');
-        }
-  
-        if (newPassword !== confirmPassword) {
-          return FailedApi(res, 400, 'Passwords do not match');
-        }
-  
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        // Update the user's password
-        await User.update({ password: hashedPassword }, { where: { email: email } });
-  
-        // Send a success response
-        return SuccessApi(res, 200, { message: 'Password changed successfully' });
-      }
     } catch (error) {
-      // Send an error response
-      return FailedApi(res, 500, { message: error.message });
+        // Send an error response
+        return FailedApi(res, 500, { message: error.message });
     }
-  };
-  
+};
+
 
 const forgetPassword = async (req, res) => {
     try {
@@ -317,10 +325,10 @@ const logUserActivity = async (req, res, next) => {
             const userName = `${firstName} ${lastName}`;
 
             logData = {
-                action: 'User Creation Successfully',
+                action: 'User Created',
                 username: userName,
                 userEmail: email,
-                details: `New user ${userName} (${email}) has been created`,
+                details: `${userName} has been created`,
                 userAgent: req.headers["user-agent"]
             };
             console.log('User Creation action detected by Admin');
@@ -338,7 +346,7 @@ const logUserActivity = async (req, res, next) => {
                     action: 'User Login',
                     username: userName,
                     userEmail: email,
-                    details: `User "${email}" jsut logged in Successfully`,
+                    details: `User "${email}" just logged in Successfully`,
                     userAgent: req.headers["user-agent"]
 
                 };
@@ -382,7 +390,10 @@ const logUserActivity = async (req, res, next) => {
             console.log('Set Password log action detected');
         } else if (req.path.startsWith('/change-password') && req.method === 'POST') {
             // For set password
-            const { email } = req.body;
+
+            const token = req.headers.authorization.split(" ")[1];
+            const decode = jwt.verify(token, Secret_Key);
+            const email = decode.email;
             const user = await User.findOne({ where: { email } });
             const userName = `${user.firstName} ${user.lastName}`;
 
@@ -394,7 +405,7 @@ const logUserActivity = async (req, res, next) => {
                 userAgent: req.headers["user-agent"]
             };
             console.log('Change Password log action detected');
-        } 
+        }
         else {
             // If the route doesn't match any specific path or method, proceed to next middleware
             return next();
@@ -402,13 +413,13 @@ const logUserActivity = async (req, res, next) => {
 
         res.on('finish', async () => {
             try {
-                if (res.statusCode >= 400 && res.statusCode <= 499) {
-                    logData.action = 'Client Side Error';
-                    logData.details = `Client error encountered: ${res.statusMessage}`;
-                } else if (res.statusCode >= 500 && res.statusCode <= 599) {
-                    logData.action = 'Server Error';
-                    logData.details = `Server error encountered: ${res.statusMessage}`;
-                }
+                // if (res.statusCode >= 400 && res.statusCode <= 499) {
+                //     logData.action = 'Client Side Error';
+                //     logData.details = `Client error encountered: ${res.statusMessage}`;
+                // } else if (res.statusCode >= 500 && res.statusCode <= 599) {
+                //     logData.action = 'Server Error';
+                //     logData.details = `Server error encountered: ${res.statusMessage}`;
+                // }
 
                 await ActivityLog.create(logData);
                 console.log('User activity logged successfully:'); // Check the logged createdLog object
@@ -426,7 +437,7 @@ const logUserActivity = async (req, res, next) => {
 const getAllLogs = async (req, res) => {
     try {
         const page = parseInt(req.query.page, 10) || 1;
-        const limit = parseInt(req.query.limit, 10) || 5;
+        const limit = parseInt(req.query.limit, 10) || 1000;
         const search = req.query.search || '';
         const offset = (page - 1) * limit;
         // Build the where clause for filtering logs

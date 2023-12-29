@@ -9,7 +9,7 @@ const authenticateUser = async (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];    // console.log(token)
     if (!token) {
-        return res.status(401).json({ message: 'Access denied. Token not provided.' });
+        return res.status(401).json({ message: 'Access denied. Token Missing.' });
     }
     try {
         const decoded = jwt.verify(token, Secret_Key);
@@ -17,7 +17,7 @@ const authenticateUser = async (req, res, next) => {
         // console.log(user)
 
         if (!user) {
-            return res.status(401).json({ message: 'Invalid token. User not found.' });
+            return res.status(401).json({ message: 'Invalid or Missing token. User not found.' });
         }
         req.user = user;
         if (user.isAdmin) {

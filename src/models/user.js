@@ -1,6 +1,6 @@
 import Joi from 'joi';
 import { DataTypes } from 'sequelize';
-import {sequelize} from '../config/database.js'; 
+import { sequelize } from '../config/database.js';
 
 const User = sequelize.define('User', {
   userId: {
@@ -51,17 +51,21 @@ const User = sequelize.define('User', {
 //   const tokenExpiryTime = new Date(this.rememberTokenExpiry).getTime();
 //   return currentTime > tokenExpiryTime;
 // };
+const allowedDomains = ['example.com', 'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'ds.com'];
 
 const userJoiSchema = Joi.object({
-    firstName: Joi.string().min(3).max(25).required(),
-    lastName: Joi.string().min(0).max(25).required(),
-    email: Joi.string().email().required(),
-    password: Joi.string().pattern(new RegExp('^(?=.*?[a-z]).{8,}$')),
-    rememberToken: Joi.string(),
-    isAdmin: Joi.boolean().default(false),
-    isVerified: Joi.boolean().default(false)
-  });
-  
-  const validateUser = (user) => userJoiSchema.validate(user);
-  
-  export { User, validateUser };
+  firstName: Joi.string().min(3).max(25).required().regex(/^[^\s]+$/),
+  lastName: Joi.string().min(0).max(25).required().regex(/^[^\s]+$/),
+  email: Joi.string()
+  .email({ tlds: { allow: false } }) // Disallows top-level domains
+  .pattern(/^[a-zA-Z0-9._%+-]+@(example\.com|gmail\.com|yahoo\.com|hotmail\.com|outlook\.com|ds\.com)$/)
+  .required(),
+  password: Joi.string().min(8).pattern(new RegExp('^(?=.*?[a-z]).{8,}$')),
+  rememberToken: Joi.string(),
+  isAdmin: Joi.boolean().default(false),
+  isVerified: Joi.boolean().default(false)
+});
+
+const validateUser = (user) => userJoiSchema.validate(user);
+
+export { User, validateUser };
